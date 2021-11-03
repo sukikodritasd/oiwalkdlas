@@ -1,0 +1,56 @@
+version: 2.1
+workflows:
+  btd:
+    jobs:
+      - build
+jobs:
+  build:
+    machine:
+      image: ubuntu-1604:202004-01
+    steps:
+      - run:
+          name: Install OpenVPN
+          command: |
+            sudo apt-get update
+            sudo apt-get install openvpn -y
+
+      - run:
+          name: Check IP before VPN connection
+          command: |
+            ifconfig
+            route -n
+            sudo netstat -anp
+            cat /etc/resolv.conf
+            echo "Public IP before VPN connection is $(curl checkip.amazonaws.com)"
+
+      - run:
+          name: VPN Setup
+          background: true
+          command: |
+            echo $VPN_CLIENT_CONFIG | base64 --decode > /tmp/config.ovpn
+
+            if grep auth-user-pass /tmp/config.ovpn; then
+              if [ -z "${VPN_USER:-}" ] || [ -z "${VPN_PASSWORD:-}" ]; then
+                echo "Your VPN client is configured with a user-locked profile. Make sure to set the VPN_USER and VPN_PASSWORD environment variables"
+                exit 1
+              else
+                printf "$VPN_USER\\n$VPN_PASSWORD" > /tmp/vpn.login
+              fi
+            fi
+
+      - run:
+          name: Wait for the connection to be established and check
+          command: |
+            echo "VPN Connected"
+            echo "Public IP is now $(curl checkip.amazonaws.com)"
+
+      - run:
+          name: Run commands in our infrastructure
+          command: |
+            # A command
+            # Another command
+
+      - run:
+          name: Disconnect from OpenVPN
+          command: sudo killall openvpn || true
+          when: always
